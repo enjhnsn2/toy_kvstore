@@ -29,7 +29,6 @@ pub struct DataAccessLayer {
     next_pageid: PageId,
     #[flux_rs::field([PageId{id: id < next_pageid}; _])]
     reserve: [PageId; MAX_PAGES],
-
 }
 
 impl DataAccessLayer {
@@ -64,7 +63,12 @@ impl DataAccessLayer {
             .read(true)
             .write(true)
             .open(file_path)?;
-        Ok(DataAccessLayer { file, reserve_len, next_pageid, reserve })
+        Ok(DataAccessLayer {
+            file,
+            reserve_len,
+            next_pageid,
+            reserve,
+        })
     }
 
     // Prepares fields reserve, reserve_len, and next_pageid for serialization.
