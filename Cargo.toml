@@ -1,0 +1,12 @@
+[package]
+name = "kvstore"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.flux]
+enabled = true
+
+[dependencies]
+flux-rs = { path = "../../flux/lib/flux-rs" }
+#flux-core = { path = "../../flux/lib/flux-core" }
+
