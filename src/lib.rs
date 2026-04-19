@@ -1,5 +1,6 @@
 pub mod bst;
 pub mod dal;
+pub mod db;
 
 #[cfg(test)]
 mod tests {

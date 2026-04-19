@@ -1,9 +1,12 @@
 use std::cmp::Ordering;
 
-use crate::dal::{PageId, MAX_PAGES};
+use crate::dal::{MAX_PAGES, PageId};
 
 pub const MAX_KEY_LEN: usize = 32;
 pub const MAX_NODES: usize = MAX_PAGES;
+
+// Max 1 item per page, so the BST can only store up to MAX_PAGES entries.
+// This is a very small capacity, but it keeps the implementation simple.
 
 /// Sentinel index meaning "no child / empty".
 const NULL: usize = usize::MAX;
@@ -71,7 +74,7 @@ impl Default for Node {
 /// Memory is entirely stack-allocated; no heap is used.
 pub struct Bst {
     nodes: [Node; MAX_NODES],
-    root: usize,                 // NULL when the tree is empty
+    root: usize,                   // NULL when the tree is empty
     free_list: [usize; MAX_NODES], // stack of free arena indices
     free_count: usize,
 }
