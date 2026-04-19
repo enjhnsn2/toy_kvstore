@@ -1,3 +1,4 @@
+pub mod bst;
 pub mod dal;
 
 #[cfg(test)]
