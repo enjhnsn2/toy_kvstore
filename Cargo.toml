@@ -8,5 +8,5 @@ enabled = true
 
 [dependencies]
 flux-rs = { path = "../../flux/lib/flux-rs" }
-#flux-core = { path = "../../flux/lib/flux-core" }
+flux-core = { path = "../../flux/lib/flux-core" }
 

@@ -19,6 +19,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "flux-core"
+version = "0.1.0"
+dependencies = [
+ "flux-attrs",
+]
+
+[[package]]
 name = "flux-rs"
 version = "0.1.0"
 dependencies = [
@@ -29,6 +36,7 @@ dependencies = [
 name = "kvstore"
 version = "0.1.0"
 dependencies = [
+ "flux-core",
  "flux-rs",
 ]
 
