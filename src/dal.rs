@@ -4,10 +4,10 @@ extern crate flux_core;
 
 // Perhaps we should not pass arrays on the stack?
 // Could potentially replace File with an in-memory representation?
-// Potential property: all used page ids are less than max_pageid, and all page ids in reserve are less than max_pageid
+// Potential property: all used page ids are less than next_pageid, and all page ids in reserve are less than next_pageid
 
 pub const PAGE_SIZE: usize = 4096;
-pub const MAX_PAGES: usize = 4096;
+pub const MAX_PAGES: usize = 256;
 
 pub type PageId = usize;
 
@@ -18,17 +18,18 @@ pub struct Page {
     pub data: [u8; PAGE_SIZE],
 }
 
-#[flux_rs::refined_by(max_pageid: int, reserve_len: int)]
-#[flux_rs::invariant(reserve_len < max_pageid)]
-#[flux_rs::invariant(max_pageid < MAX_PAGES)]
+#[flux_rs::refined_by(next_pageid: int, reserve_len: int)]
+#[flux_rs::invariant(reserve_len < next_pageid)]
+#[flux_rs::invariant(next_pageid <= MAX_PAGES)]
 pub struct DataAccessLayer {
     file: File,
-    #[flux_rs::field([PageId{id: id < max_pageid}; _])]
-    reserve: [PageId; MAX_PAGES],
     #[flux_rs::field(usize[reserve_len])]
     reserve_len: usize,
-    #[flux_rs::field(PageId[max_pageid])]
-    max_pageid: PageId,
+    #[flux_rs::field(PageId[next_pageid])]
+    next_pageid: PageId,
+    #[flux_rs::field([PageId{id: id < next_pageid}; _])]
+    reserve: [PageId; MAX_PAGES],
+
 }
 
 impl DataAccessLayer {
@@ -45,22 +46,58 @@ impl DataAccessLayer {
             file,
             reserve: [0; MAX_PAGES],
             reserve_len: 0,
-            max_pageid: 1,
+            next_pageid: 1, // 0 is reserved for metadata
         })
     }
 
-    pub fn fresh_page_id(&mut self) -> PageId {
+    #[flux_rs::trusted] // need to check its well-formed
+    pub fn from_metadata(file_path: &str, page: &Page) -> Result<Self, IOError> {
+        let buf = &page.data;
+        let reserve_len = usize::from_le_bytes(buf[0..8].try_into().unwrap());
+        let next_pageid = usize::from_le_bytes(buf[8..16].try_into().unwrap());
+        let mut reserve = [0usize; MAX_PAGES];
+        for i in 0..MAX_PAGES {
+            let start = 16 + i * 8;
+            reserve[i] = usize::from_le_bytes(buf[start..start + 8].try_into().unwrap());
+        }
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file_path)?;
+        Ok(DataAccessLayer { file, reserve_len, next_pageid, reserve })
+    }
+
+    // Prepares fields reserve, reserve_len, and next_pageid for serialization.
+    pub fn metadata_page(&self) -> Page {
+        let data = {
+            let mut buf = [0u8; PAGE_SIZE];
+            // Serialize reserve_len and next_pageid into the first 16 bytes of the page data
+            buf[0..8].copy_from_slice(&self.reserve_len.to_le_bytes());
+            buf[8..16].copy_from_slice(&self.next_pageid.to_le_bytes());
+            for (i, &id) in self.reserve.iter().enumerate() {
+                let start = 16 + i * 8;
+                buf[start..start + 8].copy_from_slice(&id.to_le_bytes());
+            }
+            buf
+        };
+        Page { id: 0, data }
+    }
+
+    pub fn fresh_page_id(&mut self) -> Result<PageId, IOError> {
         if self.reserve_len > 0 {
             self.reserve_len -= 1;
-            self.reserve[self.reserve_len]
+            Ok(self.reserve[self.reserve_len])
+        } else if self.next_pageid < MAX_PAGES {
+            let page_id = self.next_pageid;
+            self.next_pageid += 1;
+            Ok(page_id)
         } else {
-            let page_id = self.max_pageid;
-            self.max_pageid += 1;
-            page_id
+            Err(IOError::new(std::io::ErrorKind::Other, "max pages reached"))
         }
     }
 
-    #[flux_rs::spec(fn(&mut Self[@self], PageId{id: id < self.max_pageid}))]
+    #[flux_rs::trusted] // assignment might be unsafe?
+    #[flux_rs::spec(fn(&mut Self[@self], PageId{id: id < self.next_pageid}) requires self.next_pageid < MAX_PAGES)]
     pub fn release_page_id(&mut self, page_id: PageId) {
         self.reserve[self.reserve_len] = page_id;
         self.reserve_len += 1;
@@ -101,4 +138,6 @@ impl DataAccessLayer {
         }
         Ok(())
     }
+
+    // pub fn serialize
 }
